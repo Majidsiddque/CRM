@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Data separation demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    select, button { padding: .4rem .7rem; margin: .2rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: .5rem; }
+    td, th { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; font-size: .9rem; }
+    #log div { padding: .3rem 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <h2>Data separation demo</h2>
+
+  <label>Act as:
+    <select id="as"></select>
+  </label>
+  <button id="load">Show my rows</button>
+  <p id="total"></p>
+  <table id="table"></table>
+
+  <h3>Attack</h3>
+  <label>Target:
+    <select id="target"></select>
+  </label>
+  <div>
+    <button data-a="read">Read</button>
+    <button data-a="update">Change</button>
+    <button data-a="delete">Delete</button>
+    <button data-a="insert">Add</button>
+  </div>
+  <div id="log"></div>
+
+  <script>
+    const ids = [
+      ['Institute A', '11111111-1111-1111-1111-111111111111'],
+      ['Institute B', '22222222-2222-2222-2222-222222222222'],
+      ['Unknown id', '33333333-3333-3333-3333-333333333333'],
+      ['Malformed id', 'not-a-uuid'],
+    ];
+    for (const sel of ['as', 'target']) {
+      for (const [label, v] of ids) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = label;
+        document.getElementById(sel).appendChild(o);
+      }
+    }
+    document.getElementById('target').selectedIndex = 1;
+
+    const $ = (id) => document.getElementById(id);
+
+    async function load() {
+      const r = await fetch('/api/people?institute=' + encodeURIComponent($('as').value));
+      const d = await r.json();
+      const t = $('table'); t.textContent = '';
+      if (d.error) { $('total').textContent = 'Error: ' + d.error; return; }
+      $('total').textContent = 'Rows visible: ' + d.total + ' (showing 10)';
+      for (const row of d.rows) {
+        const tr = document.createElement('tr');
+        for (const v of [row.name, row.email, row.institute_id.slice(0, 8)]) {
+          const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+        }
+        t.appendChild(tr);
+      }
+    }
+    $('load').onclick = load;
+    $('as').onchange = load;
+
+    document.querySelectorAll('[data-a]').forEach((b) => {
+      b.onclick = async () => {
+        const r = await fetch('/api/attack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ as: $('as').value, target: $('target').value, action: b.dataset.a }),
+        });
+        const d = await r.json();
+        const line = document.createElement('div');
+        line.textContent = $('as').selectedOptions[0].text + ' -> ' + b.dataset.a + ' on ' +
+          $('target').selectedOptions[0].text + ': ' + (d.result ?? d.error);
+        $('log').prepend(line);
+      };
+    });
+    load();
+  </script>
+</body>
+</html>

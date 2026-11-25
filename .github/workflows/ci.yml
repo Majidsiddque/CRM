@@ -1,0 +1,139 @@
+name: Build and Quality Checks
+
+# The job id `build` is the check name that branch protection requires
+# (see scripts/protect-main.sh).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: pg
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: pg
+      DATABASE_URL: postgres://app_user:change_me@localhost:5432/postgres
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check code style
+        run: npm run lint
+
+      - name: Check TypeScript types
+        run: npm run typecheck
+
+      - name: Setup database schema
+        run: psql -h localhost -U postgres -d postgres -f db/schema.sql
+
+      - name: Seed test records
+        run: psql -h localhost -U postgres -d postgres -f db/seed.sql
+
+      - name: Run application tests
+        run: npm test
+
+      # REQUIRED STEP: Nandini's data separation tests. If any institute can
+      # read, change, delete or add another institute's rows, this fails and
+      # nothing can be merged or deployed.
+      - name: Run data separation tests (required)
+        run: npm run test:isolation
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build Docker image
+        run: docker build -t crm-backend:ci .
+
+  # Deploys the backend to the staging copy, only from main, only after every
+  # check above (including the data separation tests) has passed.
+  # Skipped cleanly until the repository variable AWS_ROLE_ARN exists
+  # (set it after `terraform apply`, see infra/staging/README.md).
+  deploy-staging:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      id-token: write # lets GitHub prove its identity to AWS (no stored keys)
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      NAME: ${{ vars.STAGING_NAME || 'crm-staging' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${NAME}-backend:${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Register new task definition revision
+        run: |
+          aws ecs describe-task-definition --task-definition "${NAME}-backend" \
+            --query taskDefinition > current.json
+          jq --arg img "$IMAGE" '
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                .compatibilities, .registeredAt, .registeredBy)
+            | .containerDefinitions[0].image = $img' current.json > next.json
+          ARN=$(aws ecs register-task-definition --cli-input-json file://next.json \
+            --query taskDefinition.taskDefinitionArn --output text)
+          echo "TASK_DEF_ARN=$ARN" >> "$GITHUB_ENV"
+
+      - name: Deploy to ECS and wait until stable
+        run: |
+          aws ecs update-service --cluster "$NAME" --service "${NAME}-backend" \
+            --task-definition "$TASK_DEF_ARN" > /dev/null
+          aws ecs wait services-stable --cluster "$NAME" --services "${NAME}-backend"
+
+      - name: Check the health address answers "running"
+        run: |
+          DNS=$(aws elbv2 describe-load-balancers --names "${NAME}-alb" \
+            --query 'LoadBalancers[0].DNSName' --output text)
+          echo "Checking http://$DNS/health"
+          curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors \
+            "http://$DNS/health" | tee health.json
+          grep -q '"status":"running"' health.json

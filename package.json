@@ -1,0 +1,38 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/api.test.ts tests/razorpay.test.ts",
+    "test:isolation": "vitest run tests/isolation.test.ts",
+    "build": "tsc",
+    "start:dev": "tsx src/index.ts",
+    "dev": "docker compose up -d --wait && node --env-file-if-exists=.env --import tsx src/index.ts",
+    "test:all": "vitest run",
+    "dev:reset": "docker compose down -v",
+    "db:seed": "docker compose exec -T db psql -U postgres -d postgres -f /docker-entrypoint-initdb.d/2-seed.sql",
+    "db:psql": "docker compose exec db psql -U postgres -d postgres"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.10",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.15.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.74.0",
+    "vitest": "^4.1.12"
+  }
+}
