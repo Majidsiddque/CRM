@@ -166,30 +166,33 @@ export function createApp(pool: pg.Pool): Express {
     }
   });
 
-  const attacks: Record<string, string> = {
-    read: 'select id from people where institute_id = $1',
-    update: "update people set name = 'hacked' where institute_id = $1",
-    delete: 'delete from people where institute_id = $1',
-    insert: "insert into people (institute_id, name) values ($1, 'intruder')",
-  };
+  // Attack endpoint for testing data isolation - only enabled in development
+  if (process.env.NODE_ENV !== 'production') {
+    const attacks: Record<string, string> = {
+      read: 'select id from people where institute_id = $1',
+      update: "update people set name = 'hacked' where institute_id = $1",
+      delete: 'delete from people where institute_id = $1',
+      insert: "insert into people (institute_id, name) values ($1, 'intruder')",
+    };
 
-  app.post('/api/attack', express.json(), async (req, res) => {
-    const { as, target, action } = (req.body ?? {}) as Record<string, string>;
-    const sql = attacks[action ?? ''];
-    if (!sql) {
-      res.status(400).json({ error: 'unknown action' });
-      return;
-    }
-    try {
-      const rowCount = await asInstitute(as ?? '', async (c) => {
-        const r = await c.query(sql, [target]);
-        return r.rowCount;
-      });
-      res.json({ result: `allowed, ${rowCount} rows affected` });
-    } catch (e) {
-      res.json({ result: `blocked: ${(e as Error).message}` });
-    }
-  });
+    app.post('/api/attack', express.json(), async (req, res) => {
+      const { as, target, action } = (req.body ?? {}) as Record<string, string>;
+      const sql = attacks[action ?? ''];
+      if (!sql) {
+        res.status(400).json({ error: 'unknown action' });
+        return;
+      }
+      try {
+        const rowCount = await asInstitute(as ?? '', async (c) => {
+          const r = await c.query(sql, [target]);
+          return r.rowCount;
+        });
+        res.json({ result: `allowed, ${rowCount} rows affected` });
+      } catch (e) {
+        res.json({ result: `blocked: ${(e as Error).message}` });
+      }
+    });
+  }
 
   return app;
 }

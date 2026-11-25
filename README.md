@@ -1,10 +1,6 @@
 # CRM – Multi-Tenant Data Isolation + Razorpay + Cloud Infrastructure
 
-> A production-ready CRM system with database-level multi-tenant isolation, Razorpay payment integration, comprehensive automated testing, and cloud deployment.
-
-[![CI Status](https://img.shields.io/badge/CI-passing-brightgreen)](.github/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-50%2B%20isolation%20tests-blue)](tests/isolation.test.ts)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+> A CRM system with database-level multi-tenant isolation, Razorpay payment integration, automated testing, and cloud deployment.
 
 ## 🎯 Key Features
 
@@ -163,4 +159,28 @@ See `infra/staging/README.md` (Terraform: ECS Fargate + load balancer with `/hea
 
 ## 📄 License
 
-MIT License - feel free to use this project for learning and development.
+This project does not currently have a formal license.
+
+## 📊 Project Status
+
+### Verified & Working
+- ✅ Database schema with Row-Level Security (RLS)
+- ✅ 50+ data isolation tests covering all attack vectors
+- ✅ 20+ application and Razorpay integration tests
+- ✅ TypeScript compilation and linting
+- ✅ Docker-based local development environment
+- ✅ One-command development start (`npm run dev`)
+- ✅ GitHub Actions CI/CD pipeline configuration
+- ✅ Terraform infrastructure-as-code for AWS
+
+### Manual/Unverified
+- ⚠️ AWS staging deployment (requires AWS account setup)
+- ⚠️ Real Razorpay test-mode payment flow (requires Razorpay account)
+- ⚠️ GitHub branch protection (requires GitHub CLI)
+- ⚠️ Budget alerts in AWS (requires terraform apply)
+- ⚠️ Production security hardening (see SECURITY.md)
+
+### Security Notes
+- The `/api/attack` endpoint is disabled in production (NODE_ENV=production)
+- The default `app_user` password (`change_me`) must be changed for production use
+- See SECURITY.md for complete hardening checklist
