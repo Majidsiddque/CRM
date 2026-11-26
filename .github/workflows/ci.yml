@@ -78,12 +78,6 @@ jobs:
           RAZORPAY_WEBHOOK_SECRET: test-secret-for-ci
           DATABASE_URL: postgres://app_user:change_me@localhost:5432/postgres
           PORT: "3000"
-          curl --fail --silent --retry 15 --retry-delay 2 --retry-connrefused http://127.0.0.1:3000/health
-          node scripts/send-test-webhook.mjs
-        env:
-          RAZORPAY_WEBHOOK_SECRET: test-secret-for-ci
-          DATABASE_URL: postgres://app_user:change_me@localhost:5432/postgres
-          PORT: "3000"
 
       - name: Build application
         run: npm run build
