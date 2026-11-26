@@ -27,9 +27,9 @@ nav button{background:none;border:0;padding:9px 16px;border-radius:999px;color:v
 nav button:hover{color:var(--ink)}
 nav button.on{background:var(--pri);color:#fff}
 .me{width:36px;height:36px;border-radius:50%;background:var(--acc);color:#13212a;font-weight:700;display:grid;place-items:center}
-#track{flex:0 0 500%;width:500%;height:100%;display:flex;transition:transform .55s cubic-bezier(.65,0,.25,1);min-height:0}
+#track{flex:0 0 600%;width:600%;height:100%;display:flex;transition:transform .55s cubic-bezier(.65,0,.25,1);min-height:0}
 @media(prefers-reduced-motion:reduce){#track{transition:none}}
-.slide{flex:0 0 20%;width:20%;height:100%;overflow-y:auto;overflow-x:hidden;padding:28px clamp(16px,4vw,56px) 80px}
+.slide{flex:0 0 16.666%;width:16.666%;height:100%;overflow-y:auto;overflow-x:hidden;padding:28px clamp(16px,4vw,56px) 80px}
 .view{overflow:hidden;flex:1 1 0;min-height:0;position:relative;display:flex}
 .pager{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;background:var(--surf);border:1px solid var(--line);padding:6px 10px;border-radius:999px;z-index:5}
 .pager button{width:34px;height:34px;border-radius:50%;border:0;background:var(--bg);font-size:1.1rem}
@@ -266,8 +266,8 @@ const secs=['Home','Dashboard','Students','Courses','Enquiries','Pay'];let cur=0
 $('#nav').innerHTML=secs.map((s,i)=>`<button onclick="go(${i})">${s}</button>`).join('');
 $('#dots').innerHTML=secs.map(()=>'<i></i>').join('');
 function go(i){
-  cur=Math.max(0,Math.min(4,i));
-  $('#track').style.transform=`translateX(-${cur*20}%)`;
+  cur=Math.max(0,Math.min(5,i));
+  $('#track').style.transform=`translateX(-${cur*16.666}%)`;
   document.querySelectorAll('#nav button').forEach((b,k)=>b.classList.toggle('on',k==cur));
   document.querySelectorAll('.dots i').forEach((b,k)=>b.classList.toggle('on',k==cur));
   $('#pp').disabled=cur==0;$('#pn').disabled=cur==4;
