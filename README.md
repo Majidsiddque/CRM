@@ -9,7 +9,7 @@ A production-ready multi-tenant CRM system with secure payment processing and co
 - **Full-featured CRM interface** with dashboard, student management, courses, and enquiries
 - **Multi-tenant architecture** with PostgreSQL Row-Level Security (RLS)
 - **Secure payment processing** via Razorpay with webhook verification
-- **Complete test coverage** (127 tests: 20 application + 88 isolation + 19 CRM API tests)
+- **Complete test coverage** (131 tests: 24 application + 88 isolation + 19 CRM API tests)
 - **Production deployment** on AWS ECS with Terraform
 - **CI/CD pipeline** with GitHub Actions
 - **Docker support** for local development
@@ -61,6 +61,7 @@ A production-ready multi-tenant CRM system with secure payment processing and co
 
 4. **Open the CRM** in your browser:
    - CRM Application: http://localhost:3000
+   - **Payment Page: http://localhost:3000/pay** 💳
    - **Security Demo: http://localhost:3000/security-demo.html** ⭐
    - API Demo: http://localhost:3000/demo.html
    - Health Check: http://localhost:3000/health
@@ -105,6 +106,36 @@ After starting the development server (`npm run dev`), open http://localhost:300
 
 This page demonstrates all the requirements: database schema, row-level security policies, 1000 test rows per institute, limited database user, automated tests covering all attack vectors, CI/CD pipeline with required security tests, Razorpay payment integration with signature verification, and AWS deployment with health checks and budget alerts.
 
+### 💳 Payment Page
+
+**Visit http://localhost:3000/pay** for a checkout-style payment experience:
+
+- **Professional UI**: Navy order summary panel + white payment form
+- **Four screens**: Form → Waiting → Success/Failure
+- **Smart polling**: Opens Razorpay in new tab, polls status every 3 seconds
+- **Cannot be tricked**: Status comes from database only (via signed webhook), never from browser
+- **Institute isolation**: Each institute's payments are separated
+- **Test mode**: Honest "TEST MODE" banner, uses test cards only
+- **Keyboard accessible**: Full focus management and ARIA labels
+
+**How it works:**
+1. User fills form (institute, amount, description)
+2. Clicks "Pay" → Creates Razorpay payment link
+3. Opens Razorpay page in new tab
+4. Page polls `/api/payment-links/:id/status` every 3 seconds
+5. When webhook confirms payment → Shows success receipt
+6. 10-minute timeout if no confirmation
+
+**Test cards:**
+- Card: `4111 1111 1111 1111`, any future expiry, any CVV
+- UPI: `success@razorpay` (success) or `failure@razorpay` (failure)
+
+**Security:**
+- Payment status endpoint respects RLS (Institute A cannot see B's payments)
+- Signature verification prevents fake webhooks
+- Idempotent webhook handling (duplicate confirmations ignored)
+- 4 automated tests verify isolation and polling flow
+
 ### Main CRM Features
 
 1. **Dashboard**
@@ -146,8 +177,16 @@ This page demonstrates all the requirements: database schema, row-level security
 ### CRM Frontend
 ```
 GET /                   # CRM application
+GET /pay                # Payment checkout page
+GET /security-demo.html # Security demonstration
 GET /demo.html          # API demo page
 GET /health             # Health check
+```
+
+### Payment Status (Polling)
+```
+GET /api/payment-links/:id/status?institute=<uuid>
+Response: { paid: boolean, payment: { razorpay_payment_id, amount_paise, currency, status, created_at } | null }
 ```
 
 ### Dashboard
