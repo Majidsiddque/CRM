@@ -242,10 +242,15 @@ data "aws_iam_policy_document" "github_assume" {
       values   = ["sts.amazonaws.com"]
     }
     # Only the main branch of this repository can deploy.
+    # GitHub now puts permanent owner/repo ID numbers into the token subject,
+    # so both the plain and the ID-qualified forms are allowed.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
+      values = [
+        "repo:${var.github_repo}:ref:refs/heads/main",
+        "repo:Majidsiddque@160457361/CRM@1471247105:ref:refs/heads/main",
+      ]
     }
   }
 }
