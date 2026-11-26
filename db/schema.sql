@@ -109,3 +109,83 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 -- Payments can be read and added, never changed or deleted by the app user.
 GRANT SELECT, INSERT ON payments TO app_user;
 GRANT SELECT, INSERT ON webhook_events TO app_user;
+
+-- ---------------------------------------------------------------------------
+-- CRM tables: Students, Courses, Enquiries
+-- ---------------------------------------------------------------------------
+
+-- Students table
+CREATE TABLE IF NOT EXISTS students (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    institute_id UUID NOT NULL REFERENCES institutes(id),
+    name VARCHAR(100) NOT NULL,
+    city VARCHAR(100),
+    course VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+    joined DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE students FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS inst_isolation ON students;
+CREATE POLICY inst_isolation
+ON students
+USING (
+    institute_id = NULLIF(current_setting('app.institute_id', true), '')::UUID
+)
+WITH CHECK (
+    institute_id = NULLIF(current_setting('app.institute_id', true), '')::UUID
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON students TO app_user;
+
+-- Courses table
+CREATE TABLE IF NOT EXISTS courses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    institute_id UUID NOT NULL REFERENCES institutes(id),
+    name VARCHAR(100) NOT NULL,
+    icon VARCHAR(10) NOT NULL DEFAULT '📚',
+    description TEXT,
+    fees VARCHAR(50),
+    seats_filled INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE courses FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS inst_isolation ON courses;
+CREATE POLICY inst_isolation
+ON courses
+USING (
+    institute_id = NULLIF(current_setting('app.institute_id', true), '')::UUID
+)
+WITH CHECK (
+    institute_id = NULLIF(current_setting('app.institute_id', true), '')::UUID
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON courses TO app_user;
+
+-- Enquiries table
+CREATE TABLE IF NOT EXISTS enquiries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    institute_id UUID NOT NULL REFERENCES institutes(id),
+    name VARCHAR(100) NOT NULL,
+    course VARCHAR(100) NOT NULL,
+    stage INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE enquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enquiries FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS inst_isolation ON enquiries;
+CREATE POLICY inst_isolation
+ON enquiries
+USING (
+    institute_id = NULLIF(current_setting('app.institute_id', true), '')::UUID
+)
+WITH CHECK (
+    institute_id = NULLIF(current_setting('app.institute_id', true), '')::UUID
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON enquiries TO app_user;

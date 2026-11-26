@@ -105,6 +105,10 @@ export function createApp(pool: pg.Pool): Express {
   );
 
   app.use(express.static('public'));
+  app.use(express.json());
+
+  // Root route serves the CRM app
+  app.get('/', (_req, res) => res.sendFile('crm.html', { root: 'public' }));
 
   app.get('/health', (_req, res) => res.json({ status: 'running' }));
 
@@ -161,6 +165,272 @@ export function createApp(pool: pg.Pool): Express {
         return r.rows;
       });
       res.json({ total: rows.length, rows });
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // Helper to get institute ID from header
+  function getInstituteId(req: express.Request): string {
+    const id = req.header('x-institute-id') ?? '';
+    if (!UUID.test(id)) {
+      throw new Error('x-institute-id header must be a valid UUID');
+    }
+    return id;
+  }
+
+  // Dashboard summary
+  app.get('/api/dashboard', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const summary = await asInstitute(inst, async (c) => {
+        const stats = await c.query(`
+          select
+            (select count(*)::int from students) as total_students,
+            (select count(*)::int from students where status = 'Active') as active_students,
+            (select count(*)::int from students where status = 'Pending') as pending_students,
+            (select count(*)::int from students where status = 'Inactive') as inactive_students,
+            (select count(*)::int from enquiries) as total_enquiries
+        `);
+        
+        const monthlyAdmissions = await c.query(`
+          select 
+            extract(month from joined)::int as month,
+            count(*)::int as count
+          from students
+          where extract(year from joined) = extract(year from current_date)
+          group by month
+          order by month
+        `);
+
+        const feesCollected = await c.query(`
+          select count(*)::int * 21000 as fees
+          from students
+          where status = 'Active'
+        `);
+
+        return {
+          ...stats.rows[0],
+          fees_collected: feesCollected.rows[0]?.fees ?? 0,
+          admissions_by_month: monthlyAdmissions.rows,
+        };
+      });
+      res.json(summary);
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // List students with filters, search, sort, and pagination
+  app.get('/api/students', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const search = String(req.query.search ?? '').toLowerCase();
+      const status = String(req.query.status ?? '');
+      const sortBy = String(req.query.sortBy ?? 'joined');
+      const sortOrder = String(req.query.sortOrder ?? 'desc');
+      const page = Math.max(0, parseInt(String(req.query.page ?? '0'), 10));
+      const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? '8'), 10)));
+
+      const allowedSortFields = ['name', 'city', 'course', 'status', 'joined'];
+      const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'joined';
+      const sortDir = sortOrder === 'asc' ? 'ASC' : 'DESC';
+
+      const result = await asInstitute(inst, async (c) => {
+        let whereClause = 'WHERE true';
+        const params: (string | number)[] = [];
+        let paramCount = 0;
+
+        if (search) {
+          paramCount++;
+          whereClause += ` AND (LOWER(name) LIKE $${paramCount} OR LOWER(city) LIKE $${paramCount} OR LOWER(course) LIKE $${paramCount})`;
+          params.push(`%${search}%`);
+        }
+
+        if (status) {
+          paramCount++;
+          whereClause += ` AND status = $${paramCount}`;
+          params.push(status);
+        }
+
+        const countResult = await c.query(`SELECT count(*)::int as total FROM students ${whereClause}`, params);
+        const total = countResult.rows[0]?.total ?? 0;
+
+        const offset = page * pageSize;
+        params.push(pageSize, offset);
+        const dataResult = await c.query(
+          `SELECT id, name, city, course, status, joined 
+           FROM students ${whereClause} 
+           ORDER BY ${sortField} ${sortDir}, id 
+           LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+          params
+        );
+
+        return { total, rows: dataResult.rows, page, pageSize };
+      });
+
+      res.json(result);
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // Create student
+  app.post('/api/students', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const { name, city, course, status } = (req.body ?? {}) as {
+        name?: string;
+        city?: string;
+        course?: string;
+        status?: string;
+      };
+
+      if (!name?.trim()) {
+        res.status(400).json({ error: 'name is required' });
+        return;
+      }
+
+      const validStatuses = ['Active', 'Pending', 'Inactive'];
+      const studentStatus = validStatuses.includes(status ?? '') ? status : 'Pending';
+
+      const result = await asInstitute(inst, async (c) => {
+        const r = await c.query(
+          `INSERT INTO students (institute_id, name, city, course, status, joined)
+           VALUES ($1, $2, $3, $4, $5, CURRENT_DATE)
+           RETURNING id, name, city, course, status, joined`,
+          [inst, name.trim(), city?.trim() || null, course?.trim() || null, studentStatus]
+        );
+        await c.query('commit');
+        return r.rows[0];
+      });
+
+      res.status(201).json(result);
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // Delete student
+  app.delete('/api/students/:id', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const studentId = req.params.id;
+
+      if (!UUID.test(studentId)) {
+        res.status(400).json({ error: 'invalid student id' });
+        return;
+      }
+
+      await asInstitute(inst, async (c) => {
+        const result = await c.query('DELETE FROM students WHERE id = $1', [studentId]);
+        await c.query('commit');
+        
+        if (result.rowCount === 0) {
+          throw new Error('student not found or access denied');
+        }
+      });
+
+      res.status(204).send();
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // List courses
+  app.get('/api/courses', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const courses = await asInstitute(inst, async (c) => {
+        const r = await c.query(
+          'SELECT id, name, icon, description, fees, seats_filled FROM courses ORDER BY name'
+        );
+        return r.rows;
+      });
+      res.json({ total: courses.length, rows: courses });
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // List enquiries
+  app.get('/api/enquiries', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const enquiries = await asInstitute(inst, async (c) => {
+        const r = await c.query(
+          'SELECT id, name, course, stage, created_at FROM enquiries ORDER BY created_at DESC'
+        );
+        return r.rows;
+      });
+      res.json({ total: enquiries.length, rows: enquiries });
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // Create enquiry
+  app.post('/api/enquiries', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const { name, course } = (req.body ?? {}) as { name?: string; course?: string };
+
+      if (!name?.trim() || !course?.trim()) {
+        res.status(400).json({ error: 'name and course are required' });
+        return;
+      }
+
+      const result = await asInstitute(inst, async (c) => {
+        const r = await c.query(
+          `INSERT INTO enquiries (institute_id, name, course, stage)
+           VALUES ($1, $2, $3, 0)
+           RETURNING id, name, course, stage, created_at`,
+          [inst, name.trim(), course.trim()]
+        );
+        await c.query('commit');
+        return r.rows[0];
+      });
+
+      res.status(201).json(result);
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
+  });
+
+  // Move enquiry to next stage
+  app.patch('/api/enquiries/:id/advance', async (req, res) => {
+    try {
+      const inst = getInstituteId(req);
+      const enquiryId = req.params.id;
+
+      if (!UUID.test(enquiryId)) {
+        res.status(400).json({ error: 'invalid enquiry id' });
+        return;
+      }
+
+      const result = await asInstitute(inst, async (c) => {
+        const current = await c.query('SELECT stage FROM enquiries WHERE id = $1', [enquiryId]);
+        
+        if (current.rows.length === 0) {
+          throw new Error('enquiry not found or access denied');
+        }
+
+        const currentStage = current.rows[0].stage;
+        if (currentStage >= 2) {
+          throw new Error('enquiry is already at final stage');
+        }
+
+        const r = await c.query(
+          `UPDATE enquiries SET stage = stage + 1 
+           WHERE id = $1 
+           RETURNING id, name, course, stage, created_at`,
+          [enquiryId]
+        );
+        await c.query('commit');
+        return r.rows[0];
+      });
+
+      res.json(result);
     } catch (e) {
       res.status(400).json({ error: (e as Error).message });
     }
