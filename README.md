@@ -61,6 +61,7 @@ A production-ready multi-tenant CRM system with secure payment processing and co
 
 4. **Open the CRM** in your browser:
    - CRM Application: http://localhost:3000
+   - **Security Demo: http://localhost:3000/security-demo.html** ⭐
    - API Demo: http://localhost:3000/demo.html
    - Health Check: http://localhost:3000/health
 
@@ -90,7 +91,21 @@ npm run build
 
 After starting the development server (`npm run dev`), open http://localhost:3000 in your browser.
 
-### Features
+### 🔒 Security Demo Page
+
+**Visit http://localhost:3000/security-demo.html** for an interactive demonstration of all data separation features:
+
+- Live database statistics (1000+ rows per institute)
+- Attack simulation tests (read, update, delete, insert attacks)
+- Table isolation verification (students, courses, enquiries, payments)
+- Database schema and RLS policy details
+- Automated test results (127 tests)
+- Razorpay integration status
+- Cloud deployment health checks
+
+This page demonstrates all the requirements: database schema, row-level security policies, 1000 test rows per institute, limited database user, automated tests covering all attack vectors, CI/CD pipeline with required security tests, Razorpay payment integration with signature verification, and AWS deployment with health checks and budget alerts.
+
+### Main CRM Features
 
 1. **Dashboard**
    - Real-time statistics: total students, active/pending/inactive counts
