@@ -222,3 +222,51 @@ describe('recording payments', () => {
     expect(await countPayments(A, id)).toBe(0);
   });
 });
+
+
+describe('payment page support', () => {
+  const linkEvent = (linkId: string, paymentId: string) =>
+    JSON.stringify({
+      event: 'payment_link.paid',
+      payload: {
+        payment_link: { entity: { id: linkId, notes: { institute_id: A } } },
+        payment: { entity: { id: paymentId, amount: 70000, currency: 'INR', status: 'captured' } },
+      },
+    });
+
+  const status = (linkId: string, institute: string) =>
+    fetch(`${base}/api/payment-links/${linkId}/status?institute=${institute}`);
+
+  it('serves the payment page at /pay', async () => {
+    const res = await fetch(`${base}/pay`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('TEST MODE');
+  });
+
+  it('says not paid until the signed confirmation arrives, then paid', async () => {
+    const linkId = 'plink_' + randomUUID().replace(/-/g, '');
+    const paymentId = 'pay_' + randomUUID();
+
+    expect(await (await status(linkId, A)).json()).toMatchObject({ paid: false, payment: null });
+
+    const raw = linkEvent(linkId, paymentId);
+    await post(raw, { 'X-Razorpay-Signature': sign(raw), 'X-Razorpay-Event-Id': 'evt_' + randomUUID() });
+
+    expect(await (await status(linkId, A)).json()).toMatchObject({
+      paid: true,
+      payment: { razorpay_payment_id: paymentId, amount_paise: '70000' },
+    });
+  });
+
+  it('does not show the other institute a payment', async () => {
+    const linkId = 'plink_' + randomUUID().replace(/-/g, '');
+    const raw = linkEvent(linkId, 'pay_' + randomUUID());
+    await post(raw, { 'X-Razorpay-Signature': sign(raw) });
+
+    expect(await (await status(linkId, B)).json()).toMatchObject({ paid: false });
+  });
+
+  it('rejects a malformed link id', async () => {
+    expect((await status('not-a-link', A)).status).toBe(400);
+  });
+});

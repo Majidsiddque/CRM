@@ -112,6 +112,9 @@ export function createApp(pool: pg.Pool): Express {
 
   app.get('/health', (_req, res) => res.json({ status: 'running' }));
 
+  // Payment page (checkout look-alike for the Razorpay TEST experiment)
+  app.get('/pay', (_req, res) => res.sendFile('pay.html', { root: 'public' }));
+
   app.get('/api/people', async (req, res) => {
     const inst = String(req.query.institute ?? '');
     try {
@@ -152,6 +155,32 @@ export function createApp(pool: pg.Pool): Express {
       res.status(201).json({ id: link.id, short_url: link.short_url, status: link.status });
     } catch (e) {
       res.status(502).json({ error: (e as Error).message });
+    }
+  });
+
+  // Has this payment link been paid yet? The payment page polls this. The answer
+  // comes only from our own database (written by the signed webhook), never from
+  // anything the browser tells us, so it cannot be faked from the page.
+  app.get('/api/payment-links/:id/status', async (req, res) => {
+    const linkId = String(req.params.id ?? '');
+    if (!/^plink_[A-Za-z0-9]+$/.test(linkId)) {
+      res.status(400).json({ error: 'invalid payment link id' });
+      return;
+    }
+    try {
+      const inst = String(req.query.institute ?? '');
+      const payment = await asInstitute(inst, async (c) => {
+        const r = await c.query(
+          `select razorpay_payment_id, amount_paise, currency, status, created_at
+             from payments where razorpay_payment_link_id = $1
+             order by created_at limit 1`,
+          [linkId],
+        );
+        return r.rows[0] ?? null;
+      });
+      res.json({ paid: payment !== null, payment });
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
     }
   });
 
