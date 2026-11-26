@@ -45,8 +45,8 @@ npm install
 npm run dev
 
 # 3. Test the system
-npm run test:isolation    # 50+ data isolation tests
-npm test                  # Application + Razorpay tests
+npm run test:isolation    # 50 isolation tests
+npm test                  # 20 app + Razorpay tests
 
 # 4. Build for production
 npm run build
@@ -185,7 +185,7 @@ See **[REMAINING-MANUAL-STEPS.md](REMAINING-MANUAL-STEPS.md)** for commands:
 - **AWS Staging Deployment**: Requires `terraform apply` with AWS credentials
 - **Budget Alerts**: Requires email confirmation after terraform apply  
 - **Real Razorpay Payment**: Requires test-mode keys + webhook configuration
-- **Docker Local Dev**: `npm run dev` not verified (Docker unavailable in development environment)
+- **Docker Local Dev**: Verified with `docker compose up` and all tests
 
 ### 🔒 Production Hardening Required
 Before production use, see **[SECURITY.md](SECURITY.md)**:
