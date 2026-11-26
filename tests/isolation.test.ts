@@ -256,3 +256,157 @@ describe('seed data', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// CRM tables: students, courses, enquiries isolation tests
+// ---------------------------------------------------------------------------
+describe.each([
+  { me: A, other: B, label: 'A attacking B (students table)' },
+  { me: B, other: A, label: 'B attacking A (students table)' },
+])('$label', ({ me, other }) => {
+  it('sees only own students', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('select institute_id from students');
+      expect(r.rows.every((x) => x.institute_id === me)).toBe(true);
+    }));
+
+  it('cannot read other institute students', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('select * from students where institute_id = $1', [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot update other institute students', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query("update students set name = 'hacked' where institute_id = $1", [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot delete other institute students', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('delete from students where institute_id = $1', [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot insert student for other institute', () =>
+    asInstitute(me, async (c) => {
+      await expect(
+        c.query("insert into students (institute_id, name, status) values ($1, 'intruder', 'Active')", [other]),
+      ).rejects.toThrow(/row-level security/);
+    }));
+
+  it('can insert student for own institute', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query(
+        "insert into students (institute_id, name, status) values ($1, 'legit_student', 'Pending')",
+        [me],
+      );
+      expect(r.rowCount).toBe(1);
+    }));
+
+  it('join with students returns only own rows', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query(
+        'select s.institute_id from students s join institutes i on i.id = s.institute_id',
+      );
+      expect(r.rows.every((x) => x.institute_id === me)).toBe(true);
+    }));
+});
+
+describe.each([
+  { me: A, other: B, label: 'A attacking B (courses table)' },
+  { me: B, other: A, label: 'B attacking A (courses table)' },
+])('$label', ({ me, other }) => {
+  it('sees only own courses', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('select institute_id from courses');
+      expect(r.rows.every((x) => x.institute_id === me)).toBe(true);
+    }));
+
+  it('cannot read other institute courses', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('select * from courses where institute_id = $1', [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot update other institute courses', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query("update courses set name = 'hacked' where institute_id = $1", [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot delete other institute courses', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('delete from courses where institute_id = $1', [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot insert course for other institute', () =>
+    asInstitute(me, async (c) => {
+      await expect(
+        c.query("insert into courses (institute_id, name) values ($1, 'Evil Course')", [other]),
+      ).rejects.toThrow(/row-level security/);
+    }));
+});
+
+describe.each([
+  { me: A, other: B, label: 'A attacking B (enquiries table)' },
+  { me: B, other: A, label: 'B attacking A (enquiries table)' },
+])('$label', ({ me, other }) => {
+  it('sees only own enquiries', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('select institute_id from enquiries');
+      expect(r.rows.every((x) => x.institute_id === me)).toBe(true);
+    }));
+
+  it('cannot read other institute enquiries', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('select * from enquiries where institute_id = $1', [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot update other institute enquiries', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query("update enquiries set stage = 2 where institute_id = $1", [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot delete other institute enquiries', () =>
+    asInstitute(me, async (c) => {
+      const r = await c.query('delete from enquiries where institute_id = $1', [other]);
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('cannot insert enquiry for other institute', () =>
+    asInstitute(me, async (c) => {
+      await expect(
+        c.query("insert into enquiries (institute_id, name, course, stage) values ($1, 'Evil', 'Hacking', 0)", [other]),
+      ).rejects.toThrow(/row-level security/);
+    }));
+});
+
+describe('wrong or missing institute identifier (new tables)', () => {
+  it('unknown id returns 0 students', () =>
+    asInstitute('33333333-3333-3333-3333-333333333333', async (c) => {
+      const r = await c.query('select * from students');
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('missing id returns 0 students', () =>
+    asInstitute(null, async (c) => {
+      const r = await c.query('select * from students');
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('unknown id returns 0 courses', () =>
+    asInstitute('33333333-3333-3333-3333-333333333333', async (c) => {
+      const r = await c.query('select * from courses');
+      expect(r.rowCount).toBe(0);
+    }));
+
+  it('unknown id returns 0 enquiries', () =>
+    asInstitute('33333333-3333-3333-3333-333333333333', async (c) => {
+      const r = await c.query('select * from enquiries');
+      expect(r.rowCount).toBe(0);
+    }));
+});

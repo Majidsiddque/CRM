@@ -129,7 +129,7 @@ export function createApp(pool: pg.Pool): Express {
   });
 
   // Create a TEST-mode Razorpay payment link for an institute.
-  app.post('/api/payment-links', express.json(), async (req, res) => {
+  app.post('/api/payment-links', async (req, res) => {
     const { institute_id: inst, amount_paise: amount, description } = (req.body ?? {}) as {
       institute_id?: string;
       amount_paise?: number;
@@ -445,7 +445,7 @@ export function createApp(pool: pg.Pool): Express {
       insert: "insert into people (institute_id, name) values ($1, 'intruder')",
     };
 
-    app.post('/api/attack', express.json(), async (req, res) => {
+    app.post('/api/attack', async (req, res) => {
       const { as, target, action } = (req.body ?? {}) as Record<string, string>;
       const sql = attacks[action ?? ''];
       if (!sql) {
