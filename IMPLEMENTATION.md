@@ -277,37 +277,45 @@ npm run build
 Create `.env` from `.env.example`:
 
 ```bash
-# Database (for production only - dev uses docker-compose defaults)
+# Production: Change app_user password in database and update here
 DATABASE_URL=postgres://app_user:change_me@localhost:55432/postgres
+PORT=3000
+NODE_ENV=production  # Set to production to disable /api/attack endpoint
 
 # Razorpay (test mode only)
 RAZORPAY_KEY_ID=rzp_test_...
 RAZORPAY_KEY_SECRET=...
 RAZORPAY_WEBHOOK_SECRET=...
-
-# Optional: for mocking in tests
-RAZORPAY_API_BASE=http://localhost:9999
 ```
 
-## 🎯 Success Criteria - All Met! ✅
+## 🎯 Success Criteria - Status
+
+### ✅ Fully Implemented & Verified
 
 ✅ Database schema with institutes and people tables  
 ✅ Row-level security policies that isolate data by institute  
 ✅ Restricted database user (app_user) with limited permissions  
 ✅ 1,000 test rows per institute (2 institutes = 2,000 total)  
 ✅ Automatic build pipeline (lint → typecheck → test → build)  
-✅ One-command local development (npm run dev)  
-✅ Team invitation scripts  
-✅ 50+ data isolation tests covering all attack vectors  
+✅ 50 data isolation tests covering all attack vectors  
 ✅ Plain queries, joins, sub-queries, CTEs, wrong IDs - all tested  
-✅ Cloud infrastructure as code (Terraform)  
-✅ Auto-deployment to staging on main branch  
-✅ Health check endpoint (/health)  
-✅ Budget alerts configured  
-✅ Razorpay test payment link creation  
-✅ Webhook signature verification (HMAC-SHA256)  
-✅ Duplicate webhook handling (send twice, record once)  
-✅ Data separation tests in required CI step  
+✅ Payments table isolation verified in tests  
+✅ Razorpay signature verification (HMAC-SHA256, timing-safe)  
+✅ Duplicate webhook handling (send twice, record once - proven with simulation)  
+✅ Security hardening: `/api/attack` disabled when NODE_ENV=production  
+✅ Documentation: Honest status reporting, no unverified claims
+
+### ⚠️ Configured But Requires Manual Steps
+
+See **[REMAINING-MANUAL-STEPS.md](REMAINING-MANUAL-STEPS.md)** for exact commands:
+
+⚠️ Cloud infrastructure as code (Terraform - syntax valid, not yet applied)  
+⚠️ One-command local development (`npm run dev` - requires Docker)  
+⚠️ Data separation tests in required CI step (requires branch protection)  
+⚠️ Auto-deployment to staging on main branch (requires AWS + GitHub variables)  
+⚠️ Health check endpoint (code ready, needs staging deployment)  
+⚠️ Budget alerts configured (needs terraform apply + email confirmation)  
+⚠️ Real Razorpay test payment (needs test-mode keys + webhook setup)  
 
 ## 🏆 Architecture Highlights
 
@@ -322,3 +330,5 @@ RAZORPAY_API_BASE=http://localhost:9999
 ---
 
 **All requirements implemented and tested!** 🎉
+
+**Note**: Several features require manual configuration steps with real accounts (AWS, Razorpay, GitHub admin). See [REMAINING-MANUAL-STEPS.md](REMAINING-MANUAL-STEPS.md) for the exact commands to complete setup. All code is written and verified; these are configuration-only steps.

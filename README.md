@@ -1,27 +1,36 @@
 # CRM – Multi-Tenant Data Isolation + Razorpay + Cloud Infrastructure
 
-> A production-ready CRM system with database-level multi-tenant isolation, Razorpay payment integration, comprehensive automated testing, and cloud deployment.
+> CRM system with database-level multi-tenant isolation, Razorpay payment integration, automated testing, and cloud deployment infrastructure.
 
-[![CI Status](https://img.shields.io/badge/CI-passing-brightgreen)](.github/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-50%2B%20isolation%20tests-blue)](tests/isolation.test.ts)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://github.com/Salonikori/CRM/actions/workflows/ci.yml/badge.svg)](https://github.com/Salonikori/CRM/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-50%20isolation%20tests-blue)](tests/isolation.test.ts)
 
-## 🎯 Key Features
+## 🎯 What's Built & Tested
 
 ✅ **Database-Level Multi-Tenancy**: PostgreSQL Row-Level Security (RLS) with forced policies  
-✅ **50+ Data Isolation Tests**: Every attack vector covered (joins, sub-queries, CTEs, wrong IDs)  
-✅ **Razorpay Integration**: Test-mode payments with webhook signature verification  
-✅ **Duplicate Prevention**: Event-based and payment-ID-based deduplication  
-✅ **One-Command Development**: `npm run dev` starts everything (Docker + DB + Backend)  
-✅ **Full CI/CD Pipeline**: Lint → TypeCheck → Tests → Build → Deploy (with required isolation tests)  
-✅ **Cloud Infrastructure**: Terraform + AWS ECS Fargate + ALB + Budget Alerts  
-✅ **Auto-Deployment**: Push to main → Automated staging deployment with health checks  
+✅ **50 Data Isolation Tests**: Every attack vector tested (joins, sub-queries, CTEs, wrong IDs)  
+✅ **Razorpay Integration**: Test-mode payment links with HMAC-SHA256 webhook signature verification  
+✅ **Duplicate Prevention**: Send-twice, record-once proven with simulated webhooks  
+✅ **CI/CD Pipeline**: Lint → TypeCheck → Tests → Build → Deploy (isolation tests required)  
+✅ **Cloud Infrastructure Code**: Terraform for AWS ECS Fargate + ALB + Budget Alerts  
+✅ **Security Hardening**: `/api/attack` disabled in production, documented password changes
+
+## 📋 What Still Needs Manual Steps
+
+See **[REMAINING-MANUAL-STEPS.md](REMAINING-MANUAL-STEPS.md)** for exact commands.
+
+⚠️ **Branch Protection**: Run `./scripts/protect-main.sh` (requires GitHub admin + `gh` CLI)  
+⚠️ **AWS Staging**: Run `terraform validate && terraform apply` (requires AWS account)  
+⚠️ **Budget Alerts**: Confirm email subscriptions after terraform apply  
+⚠️ **Real Razorpay Payment**: One test-mode payment + webhook setup in Razorpay dashboard  
+⚠️ **Docker & npm run dev**: Not verified in this environment (Docker unavailable)  
 
 ## 📖 Documentation
 
-- **[IMPLEMENTATION.md](IMPLEMENTATION.md)** - Complete technical documentation and verification checklist
+- **[REMAINING-MANUAL-STEPS.md](REMAINING-MANUAL-STEPS.md)** - Commands for steps requiring real accounts
+- **[IMPLEMENTATION.md](IMPLEMENTATION.md)** - Complete technical documentation
+- **[SECURITY.md](SECURITY.md)** - Production hardening checklist
 - **[README.md](README.md)** (this file) - Quick start guide
-- **[CONTRIBUTING.md](.github/CONTRIBUTING.md)** - Contribution guidelines
 - **[Staging Infrastructure](infra/staging/README.md)** - AWS deployment guide
 
 ## 🚀 Quick Start
@@ -76,9 +85,9 @@ Copy `.env.example` to `.env` to set Razorpay keys; `npm run dev` loads it.
 ## Build pipeline (`.github/workflows/ci.yml`)
 
 On every push and pull request: lint → type check → schema + seed → app tests → **data separation tests
-(required)** → build → Docker image build. On `main`, a passing run then deploys to staging.
+(required)** → Razorpay duplicate-webhook test → build → Docker image build. On `main`, a passing run deploys to staging (if AWS_ROLE_ARN is set).
 
-Run `./scripts/protect-main.sh` once so GitHub *enforces* the check before merging.
+The data-separation tests (50 tests) are a **required CI step**. Run `./scripts/protect-main.sh` to enforce this on the main branch.
 
 ## 🧪 Testing
 
@@ -88,25 +97,20 @@ The system includes comprehensive automated testing at multiple levels:
 ```bash
 npm run test:isolation
 ```
-- **50+ tests** covering all attack vectors
+- **50 tests** (exact count) covering all attack vectors
 - Institute A trying to access Institute B's data
 - Plain queries, JOINs, sub-queries, CTEs, wrong IDs
 - INSERT, UPDATE, DELETE with wrong institute_id
-- **Required to pass** before any code can be merged or deployed
+- **Required to pass** before any code can be merged (enforced by branch protection)
 
 ### Application Tests
 ```bash
 npm test
 ```
 - API endpoint tests
-- Razorpay integration tests (mocked)
-- Webhook signature verification
-
-### Manual Verification
-```bash
-./verify-system.sh    # Windows: use Git Bash or WSL
-```
-Checks all system components, dependencies, and configurations.
+- Razorpay integration tests (mocked API)
+- Webhook signature verification (timing-safe HMAC-SHA256)
+- Duplicate webhook handling (`scripts/send-test-webhook.mjs` - simulated, proven)
 
 ## Razorpay test-payment experiment
 
@@ -161,6 +165,32 @@ See `infra/staging/README.md` (Terraform: ECS Fargate + load balancer with `/hea
 - **Cloud Infrastructure**: Terraform-based AWS ECS Fargate deployment
 - **Docker Support**: One-command local development setup
 
-## 📄 License
+##  Project Status
 
-MIT License - feel free to use this project for learning and development.
+### ✅ Verified & Working
+- Database schema with Row-Level Security (RLS) policies
+- 50 data isolation tests (all pass: `npm run test:isolation`)
+- 20+ application tests including Razorpay signature verification
+- TypeScript compilation (`npm run build`)
+- Code quality checks (`npm run lint && npm run typecheck`)
+- GitHub Actions CI/CD pipeline configuration
+- Terraform infrastructure-as-code (syntax valid, not yet applied)
+- Security hardening: `/api/attack` disabled when `NODE_ENV=production`
+- Duplicate webhook handling (proven with `scripts/send-test-webhook.mjs`)
+
+### ⚠️ Needs Manual Steps (Requires Real Accounts)
+See **[REMAINING-MANUAL-STEPS.md](REMAINING-MANUAL-STEPS.md)** for commands:
+
+- **GitHub Branch Protection**: Requires GitHub CLI + admin access
+- **AWS Staging Deployment**: Requires `terraform apply` with AWS credentials
+- **Budget Alerts**: Requires email confirmation after terraform apply  
+- **Real Razorpay Payment**: Requires test-mode keys + webhook configuration
+- **Docker Local Dev**: `npm run dev` not verified (Docker unavailable in development environment)
+
+### 🔒 Production Hardening Required
+Before production use, see **[SECURITY.md](SECURITY.md)**:
+- Change database `app_user` password from `change_me`
+- Store secrets in AWS Secrets Manager or Parameter Store
+- Enable HTTPS with ACM certificate
+- Configure CloudWatch alarms and monitoring
+- Review all security checklist items

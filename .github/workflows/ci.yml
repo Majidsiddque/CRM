@@ -66,6 +66,13 @@ jobs:
       - name: Run data separation tests (required)
         run: npm run test:isolation
 
+      # Prove send-twice, record-once: webhook duplicate handling
+      - name: Test Razorpay duplicate webhook handling
+        run: node scripts/send-test-webhook.mjs
+        env:
+          RAZORPAY_WEBHOOK_SECRET: test-secret-for-ci
+          DATABASE_URL: postgres://app_user:change_me@localhost:5432/postgres
+
       - name: Build application
         run: npm run build
 
