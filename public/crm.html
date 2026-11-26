@@ -148,6 +148,29 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
     <p style="color:var(--mute);margin-top:6px">Move each enquiry forward as you talk to the parent or student.</p>
     <div class="kan" id="kan"></div>
   </section>
+  <section class="slide" aria-label="Pay">
+    <div style="text-align:center;padding:60px 20px">
+      <h2 style="font-size:28px;margin-bottom:12px">💳 Payment Checkout</h2>
+      <p style="color:var(--mute);margin-bottom:24px">Test Razorpay integration with secure payment links</p>
+      <a href="/pay" style="display:inline-block;padding:14px 28px;background:var(--pri);color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:16px">Open Payment Page</a>
+      <div style="margin-top:40px;padding:20px;background:var(--surf);border:1px solid var(--line);border-radius:12px;text-align:left;max-width:500px;margin-left:auto;margin-right:auto">
+        <h3 style="font-size:16px;margin-bottom:10px">✓ Features</h3>
+        <ul style="color:var(--mute);line-height:1.8;margin-left:20px">
+          <li>Checkout-style UI with order summary</li>
+          <li>Opens Razorpay in new tab</li>
+          <li>Polls status every 3 seconds</li>
+          <li>Cannot be tricked (DB-only status)</li>
+          <li>Institute isolation enforced</li>
+          <li>TEST MODE (no real charges)</li>
+        </ul>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+          <strong style="font-size:14px">Test cards:</strong><br>
+          <code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:12px;margin-top:4px;display:inline-block">4111 1111 1111 1111</code><br>
+          <code style="background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:12px;margin-top:4px;display:inline-block">success@razorpay</code>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 <div class="pager"><button id="pp" aria-label="Previous section">&#8249;</button><div class="dots" id="dots"></div><button id="pn" aria-label="Next section">&#8250;</button></div>
 </div>
@@ -239,7 +262,7 @@ let dashboardData = null;
 const stages=['New','Counselling done','Admitted'];
 
 // slider
-const secs=['Home','Dashboard','Students','Courses','Enquiries'];let cur=0;
+const secs=['Home','Dashboard','Students','Courses','Enquiries','Pay'];let cur=0;
 $('#nav').innerHTML=secs.map((s,i)=>`<button onclick="go(${i})">${s}</button>`).join('');
 $('#dots').innerHTML=secs.map(()=>'<i></i>').join('');
 function go(i){
