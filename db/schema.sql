@@ -189,3 +189,76 @@ WITH CHECK (
 );
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON enquiries TO app_user;
+
+-- ---------------------------------------------------------------------------
+-- Attendance machine experiment, step 1: raw punches
+-- ---------------------------------------------------------------------------
+
+-- Everything the machine sends is saved here exactly as received, before any
+-- parsing. The body is BYTEA so not even the character encoding is touched.
+-- Not institute-scoped (no RLS): at intake we do not yet know which institute
+-- a device belongs to. Append-only: the app user can add and read, never
+-- change or delete.
+CREATE TABLE IF NOT EXISTS raw_punches (
+    id BIGSERIAL PRIMARY KEY,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    device_serial VARCHAR(100),
+    method VARCHAR(10) NOT NULL,
+    url TEXT NOT NULL,
+    source_ip VARCHAR(64),
+    headers JSONB NOT NULL,
+    body BYTEA NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS raw_punches_device_received_idx
+    ON raw_punches (device_serial, received_at);
+
+GRANT SELECT, INSERT ON raw_punches TO app_user;
+GRANT USAGE, SELECT ON SEQUENCE raw_punches_id_seq TO app_user;
+
+-- ---------------------------------------------------------------------------
+-- Attendance machine experiment, step 2: clean punches
+-- ---------------------------------------------------------------------------
+
+-- One row per real punch, parsed out of raw_punches. The UNIQUE constraint is
+-- the dedupe: the same employee at the same device time on the same machine can
+-- only exist once, however many times the machine sends it (retries, backlog
+-- re-sends after an outage). Not institute-scoped yet: the device-to-institute
+-- link comes later. Append-only for the app user.
+CREATE TABLE IF NOT EXISTS punches (
+    id BIGSERIAL PRIMARY KEY,
+    raw_punch_id BIGINT NOT NULL REFERENCES raw_punches(id),
+    device_serial VARCHAR(100) NOT NULL,
+    employee_pin VARCHAR(50) NOT NULL,
+    device_time TIMESTAMP NOT NULL,            -- wall-clock time exactly as the machine printed it
+    status SMALLINT,
+    verify_mode SMALLINT,
+    received_at TIMESTAMPTZ NOT NULL,          -- when OUR server got it
+    batch_size INTEGER NOT NULL,               -- punches in the upload (1 = live push)
+    device_time_utc TIMESTAMPTZ NOT NULL,      -- device_time read in the machine's timezone
+    lag_seconds BIGINT NOT NULL,               -- received_at minus device_time_utc
+    clock_offset_seconds BIGINT NOT NULL DEFAULT 0, -- correction applied (0 = none)
+    corrected_time TIMESTAMPTZ NOT NULL,       -- device_time_utc + clock_offset_seconds
+    clock_flag VARCHAR(20) NOT NULL,           -- ok | late | future | corrected
+    CONSTRAINT punches_once UNIQUE (device_serial, employee_pin, device_time)
+);
+
+CREATE INDEX IF NOT EXISTS punches_device_single_idx
+    ON punches (device_serial, received_at) WHERE batch_size = 1;
+
+-- Bookkeeping: which raw uploads have been turned into punches. Anything not
+-- listed here (or listed with an error) is picked up by the reprocess command.
+CREATE TABLE IF NOT EXISTS processed_raw_punches (
+    raw_punch_id BIGINT PRIMARY KEY REFERENCES raw_punches(id),
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    kind VARCHAR(20) NOT NULL,                 -- attlog | skipped
+    lines INTEGER NOT NULL DEFAULT 0,
+    inserted INTEGER NOT NULL DEFAULT 0,
+    duplicates INTEGER NOT NULL DEFAULT 0,
+    bad_lines INTEGER NOT NULL DEFAULT 0,
+    error TEXT
+);
+
+GRANT SELECT, INSERT ON punches TO app_user;
+GRANT USAGE, SELECT ON SEQUENCE punches_id_seq TO app_user;
+GRANT SELECT, INSERT, UPDATE ON processed_raw_punches TO app_user;

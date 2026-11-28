@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import pg from 'pg';
 import type { PoolClient } from 'pg';
 import { createTestPaymentLink, verifyWebhookSignature } from './razorpay.js';
+import { machineRoutes } from './punches.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -104,6 +105,7 @@ export function createApp(pool: pg.Pool): Express {
     },
   );
 
+  app.use(machineRoutes(pool));
   app.use(express.static('public'));
   app.use(express.json());
 

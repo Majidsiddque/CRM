@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run tests/api.test.ts tests/razorpay.test.ts",
+    "test": "vitest run tests/api.test.ts tests/razorpay.test.ts tests/punches.test.ts tests/attendance.test.ts",
+    "machine:reprocess": "node --env-file-if-exists=.env --import tsx src/reprocess.ts",
     "test:isolation": "vitest run tests/isolation.test.ts",
     "build": "tsc",
     "start:dev": "tsx src/index.ts",
