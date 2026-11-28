@@ -42,7 +42,16 @@ function signedUrl(method: 'GET', key: string, expires: number): string {
 
 export function videoRoutes(pool: pg.Pool): Router {
   const r = express.Router();
-  r.post('/api/videos', express.raw({ type: () => true, limit: '50mb', inflate: false }), async (req, res) => {
+  const requireOps = (req: express.Request, res: express.Response): boolean => {
+    const token = process.env.OPS_TOKEN;
+    if (!token || req.header('x-ops-token') !== token) {
+      res.status(401).json({ error: 'valid x-ops-token required' });
+      return false;
+    }
+    return true;
+  };
+  r.post('/api/videos', (req, res, next) => requireOps(req, res) ? next() : undefined,
+    express.raw({ type: () => true, limit: '50mb', inflate: false }), async (req, res) => {
     let c: pg.PoolClient | undefined;
     try {
       const mime = req.header('content-type') ?? '';
@@ -91,7 +100,7 @@ export function videoRoutes(pool: pg.Pool): Router {
       res.status(500).json({ error: (e as Error).message });
     }
   });
-  r.get('/api/videos/:id/play', async (req, res) => {
+  r.get('/api/videos/:id/play', (req, res, next) => requireOps(req, res) ? next() : undefined, async (req, res) => {
     const result = await pool.query('select object_key from video_objects where id = $1', [req.params.id]).catch(() => ({ rows: [] }));
     if (!result.rows[0]) { res.status(404).json({ error: 'video not found' }); return; }
     try { res.json({ url: signedUrl('GET', String(result.rows[0].object_key), 300), expiresInSeconds: 300 }); }

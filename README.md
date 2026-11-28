@@ -360,3 +360,15 @@ MIT
 ## Support
 
 For issues and questions, please open a GitHub issue.
+
+## Attendance, video storage, and background jobs experiments
+
+The machine intake routes are `GET /iclock/cdata`, `GET /iclock/getrequest`, and `POST /iclock/cdata?SN=<serial>&table=ATTLOG`. Point the device at the public staging origin plus `/iclock/cdata` only after confirming the staging version contains this route. In local development, use `node scripts/fake-machine.mjs http://127.0.0.1:3000 FAKE-0001 --twice`, add `--clock-offset-minutes=90 --live=4` for clock drift, and use `--backlog=20 --twice` for outage replay. Raw deliveries are retained byte-for-byte; parsed punches are unique by device, PIN, and device timestamp.
+
+Video uploads use `POST /api/videos` with the raw video body and `Content-Type: video/*`. The upload and playback-link minting routes, as well as job administration routes, require `x-ops-token` matching `OPS_TOKEN`. A successful response contains a five-minute signed play URL. Set `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`; create the bucket before the first upload. The shared byte quota defaults to 500 MiB.
+
+Jobs are enqueued with `POST /api/jobs` using `{ "kind": "...", "payload": {} }`. Register each job kind with `registerJob` in application code. Failures retry with 5, 10, 20, 40, and then 80 second backoffs (capped at one hour) until `JOB_MAX_ATTEMPTS`; terminal errors appear at `GET /api/jobs/failed` and can be replayed at `POST /api/jobs/failed/:id/replay`.
+
+Run `npm test` and `npm run test:isolation` before deployment. The latter includes explicit checks for the global operational tables and ops-token authorization. `scripts/protect-main.sh Majidsiddque/CRM` must be run by a GitHub administrator to make the `build` status a merge requirement; a workflow step by itself does not configure GitHub branch protection.
+
+See `EXPERIMENT_RESULTS.md` for verified local and external status, and `REGISTRATIONS_TRACKER.csv` for account follow-ups.

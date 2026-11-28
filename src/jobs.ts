@@ -12,13 +12,14 @@ export async function enqueueJob(pool: pg.Pool, kind: string, payload: unknown) 
   return r.rows[0];
 }
 
-export async function runOneJob(pool: pg.Pool): Promise<boolean> {
+export async function runOneJob(pool: pg.Pool, kind?: string): Promise<boolean> {
   const c = await pool.connect();
   let job: { id: string; kind: string; payload: unknown; attempts: number } | undefined;
   try {
     await c.query('begin');
     const r = await c.query(
-      `select id, kind, payload, attempts from jobs where status = 'queued' and run_at <= now() order by run_at, created_at for update skip locked limit 1`,
+      `select id, kind, payload, attempts from jobs where status = 'queued' and run_at <= now() and ($1::text is null or kind = $1) order by run_at, created_at for update skip locked limit 1`,
+      [kind ?? null],
     );
     job = r.rows[0] as typeof job;
     if (!job) { await c.query('commit'); return false; }

@@ -6,9 +6,9 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run tests/api.test.ts tests/razorpay.test.ts tests/punches.test.ts tests/attendance.test.ts",
+    "test": "vitest run tests/api.test.ts tests/razorpay.test.ts tests/punches.test.ts tests/attendance.test.ts tests/storage.test.ts tests/jobs.test.ts",
     "machine:reprocess": "node --env-file-if-exists=.env --import tsx src/reprocess.ts",
-    "test:isolation": "vitest run tests/isolation.test.ts",
+    "test:isolation": "vitest run tests/isolation.test.ts tests/experiment-isolation.test.ts",
     "build": "tsc",
     "start:dev": "tsx src/index.ts",
     "dev": "docker compose up -d --wait && node --env-file-if-exists=.env --import tsx src/index.ts",
