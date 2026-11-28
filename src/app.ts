@@ -4,6 +4,8 @@ import pg from 'pg';
 import type { PoolClient } from 'pg';
 import { createTestPaymentLink, verifyWebhookSignature } from './razorpay.js';
 import { machineRoutes } from './punches.js';
+import { enqueueJob } from './jobs.js';
+import { videoRoutes } from './storage.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -106,8 +108,47 @@ export function createApp(pool: pg.Pool): Express {
   );
 
   app.use(machineRoutes(pool));
+  app.use(videoRoutes(pool));
   app.use(express.static('public'));
   app.use(express.json());
+
+  // Operational routes require a secret so job payloads and replay controls
+  // are never exposed as a public management surface.
+  const requireOps = (req: express.Request, res: express.Response): boolean => {
+    const token = process.env.OPS_TOKEN;
+    if (!token || req.header('x-ops-token') !== token) {
+      res.status(401).json({ error: 'valid x-ops-token required' });
+      return false;
+    }
+    return true;
+  };
+  app.post('/api/jobs', async (req, res) => {
+    if (!requireOps(req, res)) return;
+    const { kind, payload } = (req.body ?? {}) as { kind?: string; payload?: unknown };
+    if (!kind || !/^[a-z][a-z0-9_.-]{0,99}$/i.test(kind)) {
+      res.status(400).json({ error: 'valid job kind is required' }); return;
+    }
+    try { res.status(202).json(await enqueueJob(pool, kind, payload ?? {})); }
+    catch (e) { res.status(500).json({ error: (e as Error).message }); }
+  });
+  app.get('/api/jobs/failed', async (req, res) => {
+    if (!requireOps(req, res)) return;
+    const result = await pool.query('select job_id, kind, payload, attempts, error, failed_at, replayed_at from failed_jobs order by failed_at desc limit 100');
+    res.json({ rows: result.rows });
+  });
+  app.post('/api/jobs/failed/:id/replay', async (req, res) => {
+    if (!requireOps(req, res)) return;
+    try {
+      const result = await pool.query(
+        `with old as (select j.* from jobs j join failed_jobs f on f.job_id=j.id where j.id=$1 for update),
+         reset as (update jobs set status='queued', attempts=0, run_at=now(), last_error=null, updated_at=now() where id in (select id from old) returning id)
+         update failed_jobs set replayed_at=now() where job_id in (select id from reset) returning job_id`,
+        [req.params.id],
+      );
+      if (!result.rowCount) { res.status(404).json({ error: 'failed job not found' }); return; }
+      res.json({ replayed: true, jobId: result.rows[0]?.job_id });
+    } catch (e) { res.status(400).json({ error: (e as Error).message }); }
+  });
 
   // Root route serves the CRM app
   app.get('/', (_req, res) => res.sendFile('crm.html', { root: 'public' }));

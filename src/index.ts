@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { createApp } from './app.js';
+import { startJobWorker } from './jobs.js';
 
 const pool = new pg.Pool({
   connectionString:
@@ -10,10 +11,12 @@ const port = Number(process.env.PORT) || 3000;
 const server = createApp(pool).listen(port, () => {
   console.log(`listening on ${port}`);
 });
+const stopWorker = startJobWorker(pool);
 
 // Clean shutdown so ECS/Docker stops are quick and DB connections are released.
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, () => {
+    stopWorker();
     server.close(() => {
       void pool.end().finally(() => process.exit(0));
     });

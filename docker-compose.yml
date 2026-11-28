@@ -1,4 +1,20 @@
 services:
+  minio:
+    # MinIO's Docker Hub images were withdrawn; RustFS supplies a local S3-compatible API.
+    image: rustfs/rustfs:latest
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: minioadmin
+      RUSTFS_SECRET_KEY: minioadmin-change-this
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
   db:
     image: postgres:16
     environment:
@@ -15,3 +31,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+volumes:
+  minio-data:

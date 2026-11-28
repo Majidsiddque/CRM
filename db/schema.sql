@@ -262,3 +262,44 @@ CREATE TABLE IF NOT EXISTS processed_raw_punches (
 GRANT SELECT, INSERT ON punches TO app_user;
 GRANT USAGE, SELECT ON SEQUENCE punches_id_seq TO app_user;
 GRANT SELECT, INSERT, UPDATE ON processed_raw_punches TO app_user;
+
+-- Video storage quota ledger and uploaded objects.
+CREATE TABLE IF NOT EXISTS storage_usage (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    used_bytes BIGINT NOT NULL DEFAULT 0 CHECK (used_bytes >= 0)
+);
+INSERT INTO storage_usage (id, used_bytes) VALUES (1, 0) ON CONFLICT (id) DO NOTHING;
+CREATE TABLE IF NOT EXISTS video_objects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    object_key TEXT NOT NULL UNIQUE,
+    size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+    content_type VARCHAR(120) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT ON video_objects TO app_user;
+GRANT SELECT, UPDATE ON storage_usage TO app_user;
+
+-- Durable background queue and final failure ledger.
+CREATE TABLE IF NOT EXISTS jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status VARCHAR(20) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','running','succeeded','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS jobs_due_idx ON jobs (run_at, created_at) WHERE status = 'queued';
+CREATE TABLE IF NOT EXISTS failed_jobs (
+    job_id UUID PRIMARY KEY REFERENCES jobs(id),
+    kind VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    attempts INTEGER NOT NULL,
+    error TEXT NOT NULL,
+    failed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    replayed_at TIMESTAMPTZ
+);
+GRANT SELECT, INSERT, UPDATE ON jobs TO app_user;
+GRANT SELECT, INSERT, UPDATE ON failed_jobs TO app_user;
